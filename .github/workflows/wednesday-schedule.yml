@@ -1,0 +1,54 @@
+name: Wednesday schedule
+
+on:
+  schedule:
+    # GitHub cron is UTC. 9:00am Vancouver is 16:00 UTC in daylight time
+    # and 17:00 UTC in standard time. Both runs start; only the one that
+    # lands on Wednesday 9am in America/Vancouver sends the DM.
+    - cron: "0 16 * * 3"
+    - cron: "0 17 * * 3"
+  workflow_dispatch:
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if it is 9:00am Wednesday in Vancouver
+        id: clock
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 - << 'PY'
+          import os
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+
+          now = datetime.now(ZoneInfo("America/Vancouver"))
+          is_wednesday_9am = now.weekday() == 2 and now.hour == 9
+          manual = os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch"
+          should_run = manual or is_wednesday_9am
+          with open(os.environ["GITHUB_OUTPUT"], "a") as handle:
+              handle.write(f"run={'true' if should_run else 'false'}\n")
+          print(f"{now.isoformat()} {'send' if should_run else 'skip'}")
+          PY
+
+      - uses: actions/checkout@v4
+        if: steps.clock.outputs.run == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.clock.outputs.run == 'true'
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        if: steps.clock.outputs.run == 'true'
+        run: pip install -r requirements.txt
+
+      - name: Send the schedule DM
+        if: steps.clock.outputs.run == 'true'
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_USER_ID: ${{ secrets.SLACK_USER_ID }}
+        run: python -m src.lambda_function --send
