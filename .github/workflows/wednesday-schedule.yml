@@ -6,7 +6,7 @@ on:
     # and 17:00 UTC in standard time. Both runs start; only the one that
     # lands on Wednesday 9am in America/Vancouver sends the DM.
     - cron: "0 16 * * 3"
-    - cron: "0 17 * * 3"
+    # - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
